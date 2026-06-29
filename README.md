@@ -76,8 +76,10 @@ ESP32-S3 3.3V   ──── BME280 VIN
 
 - **25 kHz PWM** via LEDC-Peripheral (10-Bit, 1024 Stufen)
 - **Sanfte Ramp-Funktion** – 0 % → 100 % in ~4 Sekunden, verhindert Stromspitzen
+- **Kickstart-Puls** – beim Anlaufen aus dem Stillstand kurz auf 60 % für 400 ms, damit der Motor zuverlässig anläuft
 - **Automatische Temperaturregelung** – lineare Interpolation zwischen konfigurierbaren Temperaturgrenzen
 - **Nachtabsenkung** – konfigurierbare Start-/Endzeit, maximale Lüftergeschwindigkeit nachts begrenzt
+- **Captive Portal** – Webseite öffnet sich automatisch nach WLAN-Verbindung (iOS, Android, Windows)
 - **Zeitsync vom Browser** – beim ersten Laden der Webseite wird die ESP-Systemzeit automatisch gesetzt (kein NTP nötig)
 - **Modularer Code** – separate C-Dateien pro Funktion, keine Arduino-Abhängigkeiten
 - **Vollständiger BME280-Treiber** – direkt über IDF-I²C-API, keine Drittbibliothek
@@ -114,7 +116,8 @@ esp32_pwmcontroller/
     ├── bme280.c/.h         ← I²C-Treiber (IDF v6 API) + Sensor-Task
     ├── temp_control.c/.h   ← Automatische Temperaturregelung
     ├── night_mode.c/.h     ← Nachtmodus-Task + Zeitsync
-    ├── webserver.c/.h      ← HTTP-Server, alle API-Handler
+    ├── captive_dns.c/.h    ← UDP-DNS-Server (Port 53), Captive Portal
+    ├── webserver.c/.h      ← HTTP-Server, alle API-Handler + Portal-Redirects
     └── web/
         └── index.html      ← Eingebettetes Webinterface (EMBED_FILES)
 ```
@@ -162,8 +165,11 @@ idf.py -p /dev/cu.usbmodem12501 flash monitor
 
 1. Nach dem Booten erscheint das WLAN `espFanControl`
 2. Mit Passwort `P4ssw0rt!` verbinden
-3. Browser öffnen → `http://192.168.4.1`
-4. Beim ersten Laden synchronisiert die Seite automatisch die Uhrzeit vom Browser
+3. **Das Gerät zeigt automatisch eine Anmeldeanfrage** (Captive Portal) – antippen genügt
+4. Alternativ Browser öffnen → `http://192.168.4.1`
+5. Beim ersten Laden synchronisiert die Seite automatisch die Uhrzeit vom Browser
+
+> **Captive Portal:** Ein eingebetteter DNS-Server leitet alle Anfragen auf den ESP um. iOS zeigt sofort ein „Anmelden"-Popup, Android eine Benachrichtigung, Windows öffnet automatisch den Browser.
 
 ### Webinterface-Elemente
 
@@ -190,8 +196,10 @@ idf.py -p /dev/cu.usbmodem12501 flash monitor
 | `night_start` | 22 Uhr | Beginn Nachtabsenkung |
 | `night_end` | 7 Uhr | Ende Nachtabsenkung |
 | `night_max` | 50 % | Maximale Geschwindigkeit nachts |
+| `KICKSTART_PCT` | 60 % | Anlaufleistung beim Kaltstart (in `app_config.h`) |
+| `KICKSTART_MS` | 400 ms | Dauer des Kickstart-Pulses (in `app_config.h`) |
 
-Alle Werte sind zur Laufzeit über das Webinterface änderbar.
+Alle Laufzeit-Werte sind über das Webinterface änderbar. `KICKSTART_PCT` und `KICKSTART_MS` werden zur Kompilierzeit in `app_config.h` festgelegt.
 
 ---
 
