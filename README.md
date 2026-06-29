@@ -6,6 +6,9 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 
 ---
 
+<img width="1095" height="925" alt="image" src="https://github.com/user-attachments/assets/19bc91bf-c55f-405e-8e6d-948f6e05c35f" />
+
+
 ## Überblick
 
 | Merkmal | Wert |
