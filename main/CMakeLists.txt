@@ -7,6 +7,7 @@ idf_component_register(
         "temp_control.c"
         "night_mode.c"
         "webserver.c"
+        "captive_dns.c"
     INCLUDE_DIRS
         "."
     REQUIRES
@@ -18,6 +19,7 @@ idf_component_register(
         esp_driver_ledc
         esp_driver_i2c
         esp_timer
+        lwip
     EMBED_FILES
         "web/index.html"
 )

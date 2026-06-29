@@ -278,29 +278,82 @@ static esp_err_t handler_time(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* ─── Captive portal detection handlers ──────────────────────────────────── */
+/*
+ * Different OS families probe different URLs to detect captive portals.
+ * We redirect every probe to our dashboard so the OS shows a "Sign in" prompt.
+ *
+ * iOS / macOS  → GET /hotspot-detect.html  (via captive.apple.com)
+ * Android      → GET /generate_204         (expects HTTP 204)
+ * Windows      → GET /ncsi.txt             (expects "Microsoft NCSI")
+ *               GET /connecttest.txt       (expects "Microsoft Connect Test")
+ */
+
+#define CAPTIVE_REDIRECT "http://" WIFI_AP_IP "/"
+
+static esp_err_t handler_captive_redirect(httpd_req_t *req)
+{
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", CAPTIVE_REDIRECT);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+/* Android expects exactly HTTP 204 – we redirect instead, which also works */
+static esp_err_t handler_generate_204(httpd_req_t *req)
+{
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", CAPTIVE_REDIRECT);
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+/* Catch-all 404 → redirect to dashboard (handles any unknown hostname/path) */
+static esp_err_t handler_404(httpd_req_t *req, httpd_err_code_t err)
+{
+    (void)err;
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", CAPTIVE_REDIRECT);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
 /* ─── Server startup ─────────────────────────────────────────────────────── */
 
 void webserver_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.lru_purge_enable = true;
-    cfg.max_uri_handlers = 8;
+    cfg.max_uri_handlers = 16;   /* more slots for captive portal endpoints */
     cfg.stack_size       = 8192;
 
     httpd_handle_t server = NULL;
     ESP_ERROR_CHECK(httpd_start(&server, &cfg));
 
+    /* Application endpoints */
     static const httpd_uri_t uris[] = {
-        { .uri = "/",            .method = HTTP_GET,  .handler = handler_root    },
-        { .uri = "/api/status",  .method = HTTP_GET,  .handler = handler_status  },
-        { .uri = "/api/control", .method = HTTP_POST, .handler = handler_control },
-        { .uri = "/api/config",  .method = HTTP_POST, .handler = handler_config  },
-        { .uri = "/api/time",    .method = HTTP_POST, .handler = handler_time    },
+        { .uri = "/",                   .method = HTTP_GET,  .handler = handler_root             },
+        { .uri = "/api/status",         .method = HTTP_GET,  .handler = handler_status           },
+        { .uri = "/api/control",        .method = HTTP_POST, .handler = handler_control          },
+        { .uri = "/api/config",         .method = HTTP_POST, .handler = handler_config           },
+        { .uri = "/api/time",           .method = HTTP_POST, .handler = handler_time             },
+        /* Captive portal probes */
+        { .uri = "/generate_204",       .method = HTTP_GET,  .handler = handler_generate_204     },
+        { .uri = "/hotspot-detect.html",.method = HTTP_GET,  .handler = handler_captive_redirect },
+        { .uri = "/ncsi.txt",           .method = HTTP_GET,  .handler = handler_captive_redirect },
+        { .uri = "/connecttest.txt",    .method = HTTP_GET,  .handler = handler_captive_redirect },
+        { .uri = "/redirect",           .method = HTTP_GET,  .handler = handler_captive_redirect },
+        { .uri = "/canonical.html",     .method = HTTP_GET,  .handler = handler_captive_redirect },
     };
 
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &uris[i]));
     }
 
-    ESP_LOGI(TAG, "HTTP server running on port %d", cfg.server_port);
+    /* Redirect all unknown paths to the dashboard */
+    httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, handler_404);
+
+    ESP_LOGI(TAG, "HTTP server running  (captive portal active)");
 }

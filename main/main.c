@@ -8,6 +8,7 @@
 #include "bme280.h"
 #include "temp_control.h"
 #include "night_mode.h"
+#include "captive_dns.h"
 #include "webserver.h"
 
 static const char *TAG = "main";
@@ -68,6 +69,9 @@ void app_main(void)
     bme280_start_task();
     temp_control_start_task();
     night_mode_start_task();
+
+    /* DNS must start before the HTTP server so probes are caught immediately */
+    captive_dns_start();
 
     /* HTTP server is started last so all state is ready */
     webserver_start();
