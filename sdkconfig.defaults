@@ -1,0 +1,28 @@
+# Tick rate for finer timing granularity
+CONFIG_FREERTOS_HZ=1000
+
+# Main task stack – enough for init + logging
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Log level
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+
+# LWIP DHCP server (needed for SoftAP)
+CONFIG_LWIP_DHCPS=y
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# HTTP server
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=512
+CONFIG_HTTPD_ERR_RESP_NO_DELAY=y
+
+# WiFi
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+
+# Flash size (adjust if your board differs)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+
+# Timezone – set via browser time-sync endpoint at runtime
+CONFIG_LWIP_SNTP_MAX_SERVERS=1

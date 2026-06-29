@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fan Controller</title>
+  <style>
+    :root {
+      --bg:        #0f172a;
+      --card:      #1e293b;
+      --border:    #334155;
+      --primary:   #38bdf8;
+      --primary-d: #0ea5e9;
+      --text:      #e2e8f0;
+      --sub:       #94a3b8;
+      --success:   #34d399;
+      --warn:      #fbbf24;
+      --danger:    #f87171;
+      --night:     #a78bfa;
+      --radius:    12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    /* ── Layout ── */
+    .app { max-width: 720px; margin: 0 auto; }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 0 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary), var(--night));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+    }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 100px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .badge-night { background: rgba(167,139,250,0.15); color: var(--night); border: 1px solid rgba(167,139,250,0.3); }
+    .badge-status { background: rgba(52,211,153,0.12); color: var(--success); border: 1px solid rgba(52,211,153,0.25); }
+    .badge-offline { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.25); }
+    .hidden { display: none !important; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--sub);
+      margin-bottom: 0.5rem;
+    }
+
+    /* ── Sensor row ── */
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    @media (max-width: 480px) { .sensor-grid { grid-template-columns: 1fr 1fr; } }
+
+    .metric-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .metric-card.temp::before  { background: linear-gradient(90deg, #38bdf8, #818cf8); }
+    .metric-card.hum::before   { background: linear-gradient(90deg, #34d399, #38bdf8); }
+    .metric-card.fan::before   { background: linear-gradient(90deg, #fbbf24, #f87171); }
+
+    .metric-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--sub); margin-bottom: 0.4rem; }
+    .metric-value { font-size: 2rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+    .metric-unit  { font-size: 0.8rem; color: var(--sub); margin-top: 0.25rem; }
+
+    /* ── Fan gauge (SVG arc) ── */
+    .fan-gauge-wrap { display: flex; flex-direction: column; align-items: center; }
+    .gauge-svg { width: 80px; height: 50px; overflow: visible; }
+    .gauge-bg   { fill: none; stroke: var(--border); stroke-width: 8; stroke-linecap: round; }
+    .gauge-fill { fill: none; stroke: var(--primary); stroke-width: 8; stroke-linecap: round;
+                  transition: stroke-dashoffset 0.6s ease, stroke 0.6s ease; }
+    .gauge-label { font-size: 1.3rem; font-weight: 700; margin-top: 0.3rem; letter-spacing: -0.02em; }
+    .gauge-sub   { font-size: 0.7rem; color: var(--sub); }
+
+    /* ── Control card ── */
+    .control-card { }
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--sub);
+      margin-bottom: 1rem;
+    }
+
+    /* Mode toggle */
+    .mode-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
+    .mode-label { font-weight: 500; }
+    .toggle-group {
+      display: flex;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+    .toggle-btn {
+      padding: 0.35rem 1rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      background: transparent;
+      color: var(--sub);
+    }
+    .toggle-btn.active { background: var(--primary); color: #0f172a; }
+
+    /* Slider */
+    .slider-section { }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.6rem;
+    }
+    .slider-header label { font-size: 0.85rem; font-weight: 500; }
+    .slider-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--primary);
+      min-width: 3.5rem;
+      text-align: right;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      border: 2px solid var(--bg);
+      box-shadow: 0 0 0 2px var(--primary);
+      transition: transform 0.15s;
+    }
+    input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+    input[type=range]:disabled { opacity: 0.35; cursor: not-allowed; }
+    input[type=range]:disabled::-webkit-slider-thumb { cursor: not-allowed; }
+
+    .apply-btn {
+      margin-top: 0.9rem;
+      width: 100%;
+      padding: 0.6rem;
+      background: var(--primary);
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .apply-btn:hover { background: var(--primary-d); }
+    .apply-btn:active { transform: scale(0.98); }
+    .apply-btn:disabled { background: var(--border); color: var(--sub); cursor: not-allowed; }
+
+    /* ── Config accordion ── */
+    details { }
+    details > summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary .chevron {
+      transition: transform 0.25s;
+      color: var(--sub);
+      font-size: 0.85rem;
+    }
+    details[open] > summary .chevron { transform: rotate(180deg); }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.1rem;
+      margin-top: 1.1rem;
+    }
+    @media (max-width: 480px) { .config-grid { grid-template-columns: 1fr; } }
+    .config-grid.full { grid-template-columns: 1fr; }
+
+    .field { display: flex; flex-direction: column; gap: 0.45rem; }
+    .field label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--sub);
+    }
+    .field-row { display: flex; align-items: center; gap: 0.5rem; }
+    .field-val { font-size: 0.85rem; font-weight: 600; color: var(--text); min-width: 3rem; text-align: right; }
+
+    input[type=number] {
+      width: 5rem;
+      padding: 0.4rem 0.5rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+      text-align: center;
+      outline: none;
+    }
+    input[type=number]:focus { border-color: var(--primary); }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      cursor: pointer;
+    }
+    .toggle-switch input[type=checkbox] { display: none; }
+    .switch-track {
+      width: 42px; height: 24px;
+      background: var(--border);
+      border-radius: 12px;
+      transition: background 0.2s;
+      position: relative;
+    }
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--sub);
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle-switch input:checked ~ .switch-track { background: var(--primary); }
+    .toggle-switch input:checked ~ .switch-track::after { transform: translateX(18px); background: #fff; }
+    .switch-label { font-size: 0.85rem; font-weight: 500; }
+
+    .config-sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.1rem 0 0;
+    }
+    .sub-section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--sub);
+      margin: 1rem 0 0.75rem;
+    }
+
+    .save-btn {
+      margin-top: 1.1rem;
+      width: 100%;
+      padding: 0.65rem;
+      background: rgba(56,189,248,0.12);
+      border: 1px solid rgba(56,189,248,0.35);
+      border-radius: 8px;
+      color: var(--primary);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .save-btn:hover { background: rgba(56,189,248,0.2); }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .status-time { font-size: 0.8rem; color: var(--sub); }
+    .sync-btn {
+      padding: 0.35rem 0.9rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--sub);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .sync-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── Toast ── */
+    .toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 9999; }
+    .toast {
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      animation: slideIn 0.25s ease;
+      max-width: 260px;
+    }
+    .toast.ok      { background: rgba(52,211,153,0.15); border: 1px solid rgba(52,211,153,0.3); color: var(--success); }
+    .toast.error   { background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); color: var(--danger); }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Responsive tweaks ── */
+    @media (max-width: 360px) {
+      .sensor-grid { grid-template-columns: 1fr; }
+      .metric-value { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header>
+    <h1>
+      <span class="logo-icon">&#9651;</span>
+      Fan Controller
+    </h1>
+    <div class="header-right">
+      <span id="night-badge" class="badge badge-night hidden">&#9790; Nachtmodus</span>
+      <span id="conn-badge" class="badge badge-offline">&#9679; Offline</span>
+    </div>
+  </header>
+
+  <!-- ── Sensor metrics ──────────────────────────────────────────────────── -->
+  <div class="sensor-grid">
+    <div class="metric-card temp">
+      <div class="metric-label">Temperatur</div>
+      <div class="metric-value" id="val-temp">--.-</div>
+      <div class="metric-unit">&#176;C</div>
+    </div>
+    <div class="metric-card hum">
+      <div class="metric-label">Luftfeuchte</div>
+      <div class="metric-value" id="val-hum">--.-</div>
+      <div class="metric-unit">%&nbsp;r.F.</div>
+    </div>
+    <div class="metric-card fan">
+      <div class="metric-label">L&#252;fter</div>
+      <div class="fan-gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 100 55" xmlns="http://www.w3.org/2000/svg">
+          <!-- Semicircle arc: r=40, from 180° to 360° (left to right), centred at 50,50 -->
+          <path class="gauge-bg"
+            d="M10,50 A40,40 0 0,1 90,50"
+            pathLength="100"
+            stroke-dasharray="100"
+            stroke-dashoffset="0"
+          />
+          <path class="gauge-fill" id="gauge-arc"
+            d="M10,50 A40,40 0 0,1 90,50"
+            pathLength="100"
+            stroke-dasharray="100"
+            stroke-dashoffset="100"
+          />
+        </svg>
+        <div class="gauge-label" id="val-fan-pct">0%</div>
+        <div class="gauge-sub" id="val-fan-target">Ziel: 0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Fan control ─────────────────────────────────────────────────────── -->
+  <div class="card control-card">
+    <div class="section-title">Steuerung</div>
+
+    <!-- Mode toggle -->
+    <div class="mode-row">
+      <span class="mode-label">Modus</span>
+      <div class="toggle-group">
+        <button class="toggle-btn active" id="btn-auto"   onclick="setMode(true)">Automatik</button>
+        <button class="toggle-btn"        id="btn-manual" onclick="setMode(false)">Manuell</button>
+      </div>
+    </div>
+
+    <!-- Manual slider -->
+    <div class="slider-section">
+      <div class="slider-header">
+        <label for="speed-slider">Geschwindigkeit</label>
+        <span class="slider-value" id="slider-display">50%</span>
+      </div>
+      <input type="range" id="speed-slider" min="0" max="100" value="50"
+             oninput="onSliderInput()" disabled>
+      <button class="apply-btn" id="apply-btn" onclick="applySpeed()" disabled>
+        Geschwindigkeit setzen
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Configuration (accordion) ──────────────────────────────────────── -->
+  <details class="card">
+    <summary>
+      <span class="section-title" style="margin-bottom:0">Konfiguration</span>
+      <span class="chevron">&#9660;</span>
+    </summary>
+
+    <!-- Temperature control -->
+    <div class="sub-section-title">Temperaturregelung</div>
+    <div class="config-grid">
+      <div class="field">
+        <label>Min-Temp (L&#252;fter minimal)</label>
+        <div class="field-row">
+          <input type="range" id="cfg-temp-low" min="10" max="40" step="0.5"
+                 oninput="document.getElementById('cfg-temp-low-v').textContent = this.value+'&#176;C'">
+          <span class="field-val" id="cfg-temp-low-v">22&#176;C</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Max-Temp (L&#252;fter maximal)</label>
+        <div class="field-row">
+          <input type="range" id="cfg-temp-high" min="10" max="50" step="0.5"
+                 oninput="document.getElementById('cfg-temp-high-v').textContent = this.value+'&#176;C'">
+          <span class="field-val" id="cfg-temp-high-v">30&#176;C</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Min-Speed (%)</label>
+        <div class="field-row">
+          <input type="range" id="cfg-fan-min" min="0" max="100"
+                 oninput="document.getElementById('cfg-fan-min-v').textContent = this.value+'%'">
+          <span class="field-val" id="cfg-fan-min-v">20%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Max-Speed (%)</label>
+        <div class="field-row">
+          <input type="range" id="cfg-fan-max" min="1" max="100"
+                 oninput="document.getElementById('cfg-fan-max-v').textContent = this.value+'%'">
+          <span class="field-val" id="cfg-fan-max-v">100%</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="config-sep">
+    <!-- Night mode -->
+    <div class="sub-section-title">Nachtabsenkung</div>
+    <div class="config-grid">
+      <div class="field" style="grid-column: span 2">
+        <label class="toggle-switch">
+          <input type="checkbox" id="cfg-night-en" onchange="toggleNightFields()">
+          <span class="switch-track"></span>
+          <span class="switch-label">Nachtmodus aktivieren</span>
+        </label>
+      </div>
+      <div class="field">
+        <label>Beginn (Uhr)</label>
+        <input type="number" id="cfg-night-start" min="0" max="23" value="22">
+      </div>
+      <div class="field">
+        <label>Ende (Uhr)</label>
+        <input type="number" id="cfg-night-end" min="0" max="23" value="7">
+      </div>
+      <div class="field" style="grid-column: span 2">
+        <label>Max. L&#252;ftergeschwindigkeit nachts (%)</label>
+        <div class="field-row">
+          <input type="range" id="cfg-night-max" min="0" max="100"
+                 oninput="document.getElementById('cfg-night-max-v').textContent = this.value+'%'">
+          <span class="field-val" id="cfg-night-max-v">50%</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="save-btn" onclick="saveConfig()">&#10003;&nbsp; Konfiguration speichern</button>
+  </details>
+
+  <!-- ── Footer / time sync ──────────────────────────────────────────────── -->
+  <div class="card" style="margin-bottom: 0">
+    <div class="status-bar">
+      <span class="status-time" id="time-display">Uhr nicht synchronisiert</span>
+      <button class="sync-btn" onclick="syncTime()">&#8635; Zeit sync.</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────
+let state = {};
+let pollTimer = null;
+
+// ─── Toast ────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ─── Gauge update ─────────────────────────────────────────────────────────
+function updateGauge(pct) {
+  const arc = document.getElementById('gauge-arc');
+  // pathLength=100, so dashoffset = 100 - pct
+  const offset = 100 - Math.max(0, Math.min(100, pct));
+  arc.style.strokeDashoffset = offset;
+
+  // Colour ramp
+  let colour;
+  if (pct < 25)       colour = '#64748b';
+  else if (pct < 50)  colour = '#38bdf8';
+  else if (pct < 75)  colour = '#fbbf24';
+  else                colour = '#f87171';
+  arc.style.stroke = colour;
+}
+
+// ─── Update UI from state ─────────────────────────────────────────────────
+function applyState(s) {
+  state = s;
+
+  // Sensor values
+  document.getElementById('val-temp').textContent = s.temperature.toFixed(1);
+  document.getElementById('val-hum').textContent  = s.humidity.toFixed(1);
+
+  const fanPct = Math.round(s.fan_pct);
+  document.getElementById('val-fan-pct').textContent    = fanPct + '%';
+  document.getElementById('val-fan-target').textContent = 'Ziel: ' + Math.round(s.fan_target) + '%';
+  updateGauge(s.fan_pct);
+
+  // Mode
+  document.getElementById('btn-auto').classList.toggle('active', s.auto_mode);
+  document.getElementById('btn-manual').classList.toggle('active', !s.auto_mode);
+  const slider = document.getElementById('speed-slider');
+  const applyBtn = document.getElementById('apply-btn');
+  slider.disabled   = s.auto_mode;
+  applyBtn.disabled = s.auto_mode;
+  if (!slider._dirty) {
+    slider.value = s.manual_pct;
+    document.getElementById('slider-display').textContent = s.manual_pct + '%';
+  }
+
+  // Night badge
+  document.getElementById('night-badge').classList.toggle('hidden', !s.night_active);
+
+  // Config fields (only sync when not dirty / not open)
+  const details = document.querySelector('details');
+  if (!details.open) {
+    document.getElementById('cfg-temp-low').value       = s.temp_low;
+    document.getElementById('cfg-temp-low-v').textContent = s.temp_low + '\u00b0C';
+    document.getElementById('cfg-temp-high').value      = s.temp_high;
+    document.getElementById('cfg-temp-high-v').textContent = s.temp_high + '\u00b0C';
+    document.getElementById('cfg-fan-min').value        = s.fan_min;
+    document.getElementById('cfg-fan-min-v').textContent = s.fan_min + '%';
+    document.getElementById('cfg-fan-max').value        = s.fan_max;
+    document.getElementById('cfg-fan-max-v').textContent = s.fan_max + '%';
+    document.getElementById('cfg-night-en').checked     = s.night_enabled;
+    document.getElementById('cfg-night-start').value    = s.night_start;
+    document.getElementById('cfg-night-end').value      = s.night_end;
+    document.getElementById('cfg-night-max').value      = s.night_max;
+    document.getElementById('cfg-night-max-v').textContent = s.night_max + '%';
+    toggleNightFields();
+  }
+
+  // Time
+  if (s.time && s.time !== '1970-01-01T00:00:00') {
+    document.getElementById('time-display').textContent = 'ESP-Zeit: ' + s.time.replace('T', ' ');
+  }
+
+  // Status badge
+  const badge = document.getElementById('conn-badge');
+  badge.className = 'badge badge-status';
+  badge.textContent = '\u25cf Online';
+}
+
+// ─── Polling ──────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const r = await fetch('/api/status', { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const s = await r.json();
+    applyState(s);
+  } catch (e) {
+    const badge = document.getElementById('conn-badge');
+    badge.className = 'badge badge-offline';
+    badge.textContent = '\u25cf Offline';
+  }
+}
+
+// ─── Mode toggle ──────────────────────────────────────────────────────────
+async function setMode(auto) {
+  try {
+    const body = { auto_mode: auto };
+    if (!auto) body.manual_pct = parseInt(document.getElementById('speed-slider').value);
+    const r = await fetch('/api/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error();
+    document.getElementById('btn-auto').classList.toggle('active', auto);
+    document.getElementById('btn-manual').classList.toggle('active', !auto);
+    document.getElementById('speed-slider').disabled   = auto;
+    document.getElementById('apply-btn').disabled = auto;
+    toast(auto ? 'Automatik-Modus aktiv' : 'Manuell-Modus aktiv');
+    await poll();
+  } catch {
+    toast('Fehler beim Moduswechsel', 'error');
+  }
+}
+
+// ─── Slider ───────────────────────────────────────────────────────────────
+function onSliderInput() {
+  const val = document.getElementById('speed-slider').value;
+  document.getElementById('slider-display').textContent = val + '%';
+  document.getElementById('speed-slider')._dirty = true;
+}
+
+async function applySpeed() {
+  const pct = parseInt(document.getElementById('speed-slider').value);
+  try {
+    const r = await fetch('/api/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auto_mode: false, manual_pct: pct }),
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error();
+    document.getElementById('speed-slider')._dirty = false;
+    toast('Geschwindigkeit gesetzt: ' + pct + '%');
+    await poll();
+  } catch {
+    toast('Fehler beim Setzen', 'error');
+  }
+}
+
+// ─── Night mode fields ────────────────────────────────────────────────────
+function toggleNightFields() {
+  const en = document.getElementById('cfg-night-en').checked;
+  ['cfg-night-start', 'cfg-night-end', 'cfg-night-max'].forEach(id => {
+    document.getElementById(id).disabled = !en;
+  });
+}
+
+// ─── Save config ──────────────────────────────────────────────────────────
+async function saveConfig() {
+  const cfg = {
+    temp_low:      parseFloat(document.getElementById('cfg-temp-low').value),
+    temp_high:     parseFloat(document.getElementById('cfg-temp-high').value),
+    fan_min:       parseInt(document.getElementById('cfg-fan-min').value),
+    fan_max:       parseInt(document.getElementById('cfg-fan-max').value),
+    night_enabled: document.getElementById('cfg-night-en').checked,
+    night_start:   parseInt(document.getElementById('cfg-night-start').value),
+    night_end:     parseInt(document.getElementById('cfg-night-end').value),
+    night_max:     parseInt(document.getElementById('cfg-night-max').value),
+  };
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error();
+    toast('Konfiguration gespeichert');
+    await poll();
+  } catch {
+    toast('Fehler beim Speichern', 'error');
+  }
+}
+
+// ─── Time sync ────────────────────────────────────────────────────────────
+async function syncTime() {
+  try {
+    const r = await fetch('/api/time', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ epoch_ms: Date.now() }),
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error();
+    toast('Zeit synchronisiert');
+    await poll();
+  } catch {
+    toast('Zeitstempel-Fehler', 'error');
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+(async function init() {
+  // Sync time as soon as page loads
+  await syncTime();
+  // Initial status fetch
+  await poll();
+  // Continuous polling
+  setInterval(poll, 2000);
+})();
+</script>
+
+</body>
+</html>
