@@ -23,6 +23,12 @@
 #define RAMP_INTERVAL_MS    20      /* task wake interval */
 #define RAMP_STEP_PCT       0.5f   /* % per interval → 0→100 in ~4 s */
 
+/* ─── Kickstart (cold-start from 0 %) ─────────────────────────────────────── */
+/* When the fan is stopped and a non-zero target is set, briefly run at        */
+/* KICKSTART_PCT to overcome motor inertia, then ramp to the real target.      */
+#define KICKSTART_PCT       60u     /* % during kickstart pulse               */
+#define KICKSTART_MS        400u    /* duration of the kickstart pulse (ms)   */
+
 /* ─── Sensor ───────────────────────────────────────────────────────────────── */
 #define BME280_ADDR         0x76
 #define SENSOR_INTERVAL_MS  2000

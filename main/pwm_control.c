@@ -71,27 +71,45 @@ static void ramp_task(void *pvParam)
 {
     (void)pvParam;
     TickType_t last_wake = xTaskGetTickCount();
+    bool       in_kickstart = false; /* true while kickstart pulse is active */
 
     for (;;) {
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(RAMP_INTERVAL_MS));
 
         if (xSemaphoreTake(g_state.mutex, pdMS_TO_TICKS(10)) != pdTRUE) continue;
-
         float current = g_state.fan_current_pct;
         float target  = g_state.fan_target_pct;
+        xSemaphoreGive(g_state.mutex);
 
+        /* ── Kickstart: fan was stopped, new target is non-zero ────────── */
+        if (!in_kickstart && current < 1.0f && target >= 1.0f) {
+            in_kickstart = true;
+            ESP_LOGI("pwm", "Kickstart %.0f %% for %u ms", (float)KICKSTART_PCT, KICKSTART_MS);
+            apply_duty(KICKSTART_PCT);
+            vTaskDelay(pdMS_TO_TICKS(KICKSTART_MS));
+            current = KICKSTART_PCT;
+            last_wake = xTaskGetTickCount(); /* re-sync timing after the delay */
+        }
+
+        /* Reset kickstart flag once fan is fully stopped again */
+        if (target < 1.0f) {
+            in_kickstart = false;
+        }
+
+        /* ── Normal ramp toward target ──────────────────────────────────── */
         if (fabsf(current - target) > RAMP_STEP_PCT) {
             current += (target > current) ? RAMP_STEP_PCT : -RAMP_STEP_PCT;
         } else {
             current = target;
         }
 
-        /* Clamp */
         if (current < 0.0f)   current = 0.0f;
         if (current > 100.0f) current = 100.0f;
 
-        g_state.fan_current_pct = current;
-        xSemaphoreGive(g_state.mutex);
+        if (xSemaphoreTake(g_state.mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            g_state.fan_current_pct = current;
+            xSemaphoreGive(g_state.mutex);
+        }
 
         apply_duty(current);
     }
