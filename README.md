@@ -1,7 +1,8 @@
 # ESP32-S3 Lüftersteuerung – 4× Arctic P14 Pro PST
 
-Temperaturgesteuerte PWM-Lüfterregelung mit Webinterface, gebaut auf **ESP-IDF v6** (kein Arduino-Framework).  
+Temperaturgesteuerte PWM-Lüfterregelung mit OLED-Display und Webinterface, gebaut auf **ESP-IDF v6** (kein Arduino-Framework).  
 Vier Arctic-P14-Pro-PST-Lüfter werden über einen IRLZ44N Low-Side-MOSFET mit 25 kHz PWM gesteuert.  
+Ein 0,96"-SSD1306-OLED zeigt Temperatur, Luftfeuchte, Lüfterleistung und Betriebsmodus direkt am Gerät an.  
 Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbinden und im Browser öffnen.
 
 ---
@@ -51,31 +52,72 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 | 3,3 V | Sensorversorgung | BME280 VIN + OLED VCC |
 | GND | Gemeinsame Masse | Alle GND |
 
-> **I²C-Bus:** BME280 (0x76) und SSD1306 OLED (0x3C) teilen sich GPIO 21/22. Der Bus wird einmal in `i2c_bus.c` initialisiert; beide Treiber erhalten den gleichen Handle. Externe Pull-ups (4,7 kΩ) sind optional – die internen Pull-ups des ESP32 reichen bei kurzen Leitungen.
+> **I²C-Bus:** BME280 (0x76) und SSD1306 OLED (0x3C) teilen sich GPIO 21/22 bei **400 kHz**. Der Bus wird einmal in `i2c_bus.c` initialisiert; beide Treiber erhalten den gleichen Handle via `i2c_bus_get_handle()`. Externe Pull-ups (4,7 kΩ) sind optional – die internen Pull-ups des ESP32 reichen bei kurzen Leitungen.
 
-### Schaltung (vereinfacht)
+### Schaltplan
+
+#### 12-V-Kreis – Lüfter & MOSFET
 
 ```
-12V ──────────────────────┬──── Lüfter +12V (alle 4 parallel)
-                          │
-                    [100µF + 100nF]
-                          │
-GND ──────────────────────┤
-                          │
-Lüfter GND ──────── Drain (IRLZ44N)
-                    Gate ──── 100Ω ──── GPIO16
-                    Source ── GND
-                    Gate ──── 10kΩ ─── GND (Pull-Down)
-
-ESP32-S3 GPIO21 ──┬─ BME280 SDA
-                  └─ OLED SDA
-ESP32-S3 GPIO22 ──┬─ BME280 SCL
-                  └─ OLED SCL
-ESP32-S3 3.3V   ──┬─ BME280 VIN
-                  └─ OLED VCC
+  +12V (Netzteil)
+       │
+       ├─────────────────────────────────────────────── +12V (rot) ──────────────────┐
+       │                                                                              │
+     ──┤├── C1: 100 µF / 25 V  ──┐                                         ┌──────────┴──────────┐
+     ──┤├── C2: 100 nF          ─┤ GND                               ┌─────┤   Lüfter L1         │
+       │   (nah am MOSFET,       │                                   ├─────┤   Lüfter L2         │
+       │    parallel zu 12V/GND) │                                   ├─────┤   Lüfter L3  (alle  │
+       │                         │                                   └─────┤   Lüfter L4  4-pin) │
+      GND                       GND                                        │                     │
+                                                                           │   GND (schwarz) ─────┼──┐
+                                                                           │   +12V (rot)    ─────┘  │
+                                                                           │   Tacho (grün)  ─ n.c.  │
+                                                                           │   PWM  (blau)   ─ n.c.  │
+                                                                           └─────────────────────────┘
+                                                                                                   │
+                                                                                                   │ (alle 4 GND zusammen)
+                                                                                                   │
+                                                                                               ┌───┴───┐
+                                                              GPIO16 ──── R1 (100 Ω) ──────────┤  G    │
+                                                              GND    ──── R2 (10 kΩ)  ──────────┤  G    │  IRLZ44N
+                                                                                               ├─  D   │  (TO-220)
+                                                                                               │       │
+                                                                                               └───┬───┘
+                                                                                                   │ S (Source)
+                                                                                                  GND
 ```
 
-> **Hinweis:** Der IRLZ44N arbeitet mit 3,3 V Gate-Spannung ausreichend gut (R_DS(on) ≈ 35 mΩ bei 1,4 A Gesamtstrom = ca. 50 mW Verlustleistung).
+> R_DS(on) ≈ 35 mΩ bei V_GS = 3,3 V, I_D = 1,4 A → P_V ≈ 70 mW. Kein Kühlkörper nötig.
+
+---
+
+#### 3,3-V-Kreis – ESP32-S3 & I²C-Sensoren
+
+```
+  +3V3 (ESP32)
+       │
+       ├───────────────────────────────── VCC ─── BME280  (I²C-Adresse 0x76)
+       │                                           ├── SDA ──────────────────────────┐
+       │                                           ├── SCL ────────────────────────┐ │
+       │                                           └── GND ───── GND               │ │
+       │                                                                            │ │
+       └───────────────────────────────── VCC ─── SSD1306 OLED (I²C-Adresse 0x3C) │ │
+                                                   ├── SDA ──────────────────────────┤ │
+                                                   ├── SCL ────────────────────────┤ │
+                                                   └── GND ───── GND               │ │
+                                                                                    │ │
+                                              ┌─────────────────────────────────────┘ │
+                                              │   I²C-Bus (400 kHz)                   │
+                                              │                             ┌──────────┘
+                                              ▼                             ▼
+                                  ESP32-S3 GPIO21 (SDA)       ESP32-S3 GPIO22 (SCL)
+
+
+  ESP32-S3 GPIO16 (PWM 25 kHz) ──── R1 ──── MOSFET Gate      (siehe 12-V-Kreis oben)
+  ESP32-S3 GND ────────────────────────────────────────────── GND (gemeinsam mit Netzteil)
+```
+
+> Externe Pull-up-Widerstände (4,7 kΩ) auf SDA/SCL sind **optional** – bei kurzen Leitungen (< 10 cm) reichen die internen Pull-ups des ESP32.
 
 ---
 
@@ -229,12 +271,17 @@ idf.py -p /dev/cu.usbmodem12501 flash monitor
 | `night_start` | 22 Uhr | Beginn Nachtabsenkung |
 | `night_end` | 7 Uhr | Ende Nachtabsenkung |
 | `night_max` | 50 % | Maximale Geschwindigkeit nachts |
-| `KICKSTART_PCT` | 60 % | Anlaufleistung beim Kaltstart (in `app_config.h`) |
-| `KICKSTART_MS` | 400 ms | Dauer des Kickstart-Pulses (in `app_config.h`) |
+| `KICKSTART_PCT` | 60 % | Anlaufleistung beim Kaltstart |
+| `KICKSTART_MS` | 400 ms | Dauer des Kickstart-Pulses |
+| `RAMP_INTERVAL_MS` | 20 ms | Wake-Intervall des Ramp-Tasks |
+| `RAMP_STEP_PCT` | 0,5 % | Schrittweite pro Intervall (0→100 % in ~4 s) |
+| `SENSOR_INTERVAL_MS` | 2000 ms | BME280-Leseintervall |
 | `OLED_I2C_ADDR` | 0x3C | I²C-Adresse des SSD1306 (0x3D wenn SA0=High) |
 | `OLED_REFRESH_MS` | 2500 ms | Display-Aktualisierungsintervall |
+| `I2C_FREQ_HZ` | 400 000 Hz | I²C-Bus-Taktfrequenz |
 
-Alle Laufzeit-Werte sind über das Webinterface änderbar. `KICKSTART_PCT` und `KICKSTART_MS` werden zur Kompilierzeit in `app_config.h` festgelegt.
+Alle Laufzeit-Werte (`temp_low`, `temp_high`, `fan_min`, `fan_max`, Nachtmodus) sind über das Webinterface änderbar.  
+Die übrigen Parameter werden zur Kompilierzeit in `app_config.h` festgelegt.
 
 ---
 
