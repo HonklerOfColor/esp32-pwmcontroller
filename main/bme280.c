@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 
 #include "app_config.h"
+#include "i2c_bus.h"
 #include "bme280.h"
 
 static const char *TAG = "bme280";
@@ -121,17 +122,10 @@ static uint32_t compensate_humidity(int32_t adc_H)
 
 esp_err_t bme280_init(void)
 {
-    /* I2C master bus */
-    i2c_master_bus_config_t bus_cfg = {
-        .clk_source            = I2C_CLK_SRC_DEFAULT,
-        .i2c_port              = I2C_PORT,
-        .scl_io_num            = I2C_SCL_GPIO,
-        .sda_io_num            = I2C_SDA_GPIO,
-        .glitch_ignore_cnt     = 7,
-        .flags.enable_internal_pullup = true,
-    };
-    i2c_master_bus_handle_t bus;
-    ESP_RETURN_ON_ERROR(i2c_new_master_bus(&bus_cfg, &bus), TAG, "bus_init");
+    /* Use the shared I²C bus (created by i2c_bus_init() in main) */
+    i2c_master_bus_handle_t bus = i2c_bus_get_handle();
+    ESP_RETURN_ON_FALSE(bus != NULL, ESP_ERR_INVALID_STATE, TAG,
+                        "i2c_bus_init() must be called before bme280_init()");
 
     /* BME280 device */
     i2c_device_config_t dev_cfg = {

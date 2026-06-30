@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.c"
+        "i2c_bus.c"
         "wifi_ap.c"
         "pwm_control.c"
         "bme280.c"
@@ -8,6 +9,7 @@ idf_component_register(
         "night_mode.c"
         "webserver.c"
         "captive_dns.c"
+        "oled.c"
     INCLUDE_DIRS
         "."
     REQUIRES

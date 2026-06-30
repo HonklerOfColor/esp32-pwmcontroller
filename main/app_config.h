@@ -33,6 +33,10 @@
 #define BME280_ADDR         0x76
 #define SENSOR_INTERVAL_MS  2000
 
+/* ─── OLED display (SSD1306 128×64) ────────────────────────────────────────── */
+#define OLED_I2C_ADDR       0x3C    /* common default; 0x3D if SA0 pin is high */
+#define OLED_REFRESH_MS     2500    /* display update interval                 */
+
 /* ─── WiFi AP ──────────────────────────────────────────────────────────────── */
 #define WIFI_SSID           "espFanControl"
 #define WIFI_PASS           "P4ssw0rt!"

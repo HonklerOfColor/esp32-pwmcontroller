@@ -3,6 +3,7 @@
 #include "nvs_flash.h"
 
 #include "app_config.h"
+#include "i2c_bus.h"
 #include "wifi_ap.h"
 #include "pwm_control.h"
 #include "bme280.h"
@@ -10,6 +11,7 @@
 #include "night_mode.h"
 #include "captive_dns.h"
 #include "webserver.h"
+#include "oled.h"
 
 static const char *TAG = "main";
 
@@ -61,14 +63,22 @@ void app_main(void)
     pwm_init();
     ESP_LOGI(TAG, "PWM initialised  GPIO%d  %d Hz", PWM_GPIO, PWM_FREQ_HZ);
 
+    /* Shared I²C bus – must be created before bme280_init() and oled_init() */
+    ESP_ERROR_CHECK(i2c_bus_init());
+
     bme280_init();
     ESP_LOGI(TAG, "BME280 initialised  I2C addr=0x%02X", BME280_ADDR);
+
+    if (oled_init() != ESP_OK) {
+        ESP_LOGW(TAG, "OLED not found – display disabled (check wiring/address)");
+    }
 
     /* Start background tasks */
     pwm_start_ramp_task();
     bme280_start_task();
     temp_control_start_task();
     night_mode_start_task();
+    oled_start_task();
 
     /* DNS must start before the HTTP server so probes are caught immediately */
     captive_dns_start();
