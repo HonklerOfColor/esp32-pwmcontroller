@@ -80,9 +80,9 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
                                                                                                    │ (alle 4 GND zusammen)
                                                                                                    │
                                                                                                ┌───┴───┐
-                                                   GPIO3 (D2) ──── R1 (100 Ω) ──────────┤  G    │
-                                                              GND    ──── R2 (10 kΩ)  ──────────┤  G    │  IRLZ44N
-                                                                                               ├─  D   │  (TO-220)
+                                                          GPIO3 (D2) ──── R1 (100 Ω) ──────────┤  G    │
+                                                             GND    ──── R2 (10 kΩ)  ──────────┤  G    │  IRLZ44N
+                                                                                               ├─ D    │  (TO-220)
                                                                                                │       │
                                                                                                └───┬───┘
                                                                                                    │ S (Source)
@@ -99,18 +99,18 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
   +3V3 (XIAO-Pin)
        │
        ├───────────────────────────────── VCC ─── BME280  (I²C-Adresse 0x76)
-       │                                           ├── SDA ──────────────────────────┐
-       │                                           ├── SCL ────────────────────────┐ │
-       │                                           └── GND ───── GND               │ │
+       │                                           ├── SDA ─────────────────────────-─┐
+       │                                           ├── SCL ────────────────────────-┐ │
+       │                                           └── GND ───── GND                │ │
        │                                                                            │ │
-       └───────────────────────────────── VCC ─── SSD1306 OLED (I²C-Adresse 0x3C) │ │
-                                                   ├── SDA ──────────────────────────┤ │
-                                                   ├── SCL ────────────────────────┤ │
-                                                   └── GND ───── GND               │ │
+       └───────────────────────────────── VCC ─── SSD1306 OLED (I²C-Adresse 0x3C)   │ │
+                                                   ├── SDA ────────────────────────-┤ │
+                                                   ├── SCL ────────────────────────-┤ │
+                                                   └── GND ───── GND                │ │
                                                                                     │ │
                                               ┌─────────────────────────────────────┘ │
                                               │   I²C-Bus (400 kHz)                   │
-                                              │                             ┌──────────┘
+                                              │                             ┌─────────┘
                                               ▼                             ▼
                                   GPIO5 / D4 (SDA)            GPIO6 / D5 (SCL)
                                   [XIAO-Label: SDA]           [XIAO-Label: SCL]
