@@ -29,8 +29,12 @@
 #define I2C_PORT            I2C_NUM_0
 #define I2C_FREQ_HZ         400000
 
-/* Optional: Tachometer-Eingang (Pin 3 eines Lüfters, pull-up 4,7 kΩ an 3V3)  */
-/* #define TACH_GPIO        2  */
+/* ─── Tachometer (Lüfter Pin 3, grün) ──────────────────────────────────────── */
+/* D1 (GPIO2): 4,7 kΩ pull-up an 3V3, dann zu Pin 3 EINES Lüfters.             */
+/* PST-Tach-Leitung ist NICHT geteilt – nur einen Lüfter anschließen.           */
+#define TACH_GPIO               2
+#define TACH_PULSES_PER_REV     2       /* Arctic P14: 2 Impulse pro Umdrehung  */
+#define TACH_SAMPLE_MS          1000    /* Abtastfenster in ms                  */
 
 /* ─── LEDC / PWM ───────────────────────────────────────────────────────────── */
 #define PWM_FREQ_HZ         25000
@@ -91,6 +95,9 @@ typedef struct {
     float    temp_high;        /* fan at fan_max above this temp */
     uint8_t  fan_min;          /* % */
     uint8_t  fan_max;          /* % */
+
+    /* Tachometer */
+    uint32_t fan_rpm;          /* measured fan speed in RPM (0 if stopped)  */
 
     /* Night-mode config */
     bool     night_enabled;

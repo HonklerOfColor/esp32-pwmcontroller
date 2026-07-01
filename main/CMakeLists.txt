@@ -10,6 +10,7 @@ idf_component_register(
         "webserver.c"
         "captive_dns.c"
         "oled.c"
+        "tach.c"
     INCLUDE_DIRS
         "."
     REQUIRES
@@ -20,6 +21,7 @@ idf_component_register(
         esp_http_server
         esp_driver_ledc
         esp_driver_i2c
+        esp_driver_gpio
         esp_timer
         lwip
     EMBED_FILES

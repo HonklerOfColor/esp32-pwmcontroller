@@ -12,6 +12,7 @@
 #include "captive_dns.h"
 #include "webserver.h"
 #include "oled.h"
+#include "tach.h"
 
 static const char *TAG = "main";
 
@@ -23,6 +24,7 @@ static void state_init(void)
     g_state.mutex = xSemaphoreCreateMutex();
     configASSERT(g_state.mutex);
 
+    g_state.fan_rpm         = 0u;
     g_state.temperature     = 0.0f;
     g_state.humidity        = 0.0f;
     g_state.fan_current_pct = 0.0f;
@@ -73,12 +75,17 @@ void app_main(void)
         ESP_LOGW(TAG, "OLED not found – display disabled (check wiring/address)");
     }
 
+    if (tach_init() != ESP_OK) {
+        ESP_LOGW(TAG, "Tach init failed – RPM will read 0 (check GPIO%d wiring)", TACH_GPIO);
+    }
+
     /* Start background tasks */
     pwm_start_ramp_task();
     bme280_start_task();
     temp_control_start_task();
     night_mode_start_task();
     oled_start_task();
+    tach_start_task();
 
     /* DNS must start before the HTTP server so probes are caught immediately */
     captive_dns_start();

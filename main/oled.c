@@ -9,6 +9,7 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include "esp_log.h"
 #include "esp_check.h"
@@ -274,16 +275,18 @@ static void oled_render(void)
     fb_clear();
 
     /* ── Snapshot state ─────────────────────────────────────────────── */
-    float   temp     = 0.0f;
-    float   hum      = 0.0f;
-    float   fan_pct  = 0.0f;
-    bool    auto_md  = true;
+    float    temp     = 0.0f;
+    float    hum      = 0.0f;
+    float    fan_pct  = 0.0f;
+    bool     auto_md  = true;
+    uint32_t fan_rpm  = 0;
 
     if (xSemaphoreTake(g_state.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
         temp    = g_state.temperature;
         hum     = g_state.humidity;
         fan_pct = g_state.fan_current_pct;
         auto_md = g_state.auto_mode;
+        fan_rpm = g_state.fan_rpm;
         xSemaphoreGive(g_state.mutex);
     }
 
@@ -327,8 +330,13 @@ static void oled_render(void)
     snprintf(f_str, sizeof(f_str), "Luefter: %3.0f%%", fan_pct);
     fb_str_s(0, 4, f_str);
 
-    /* ── Page 5: fan speed bar ──────────────────────────────────────── */
-    fb_bar(5, 1, 6, (int)fan_pct);
+    /* ── Page 5: RPM ─────────────────────────────────────────────────── */
+    char r_str[20];
+    snprintf(r_str, sizeof(r_str), "  %4u RPM", (unsigned)fan_rpm);
+    fb_str_s(0, 5, r_str);
+
+    /* ── Page 6: fan speed bar ──────────────────────────────────────── */
+    fb_bar(6, 1, 6, (int)fan_pct);
 }
 
 /* ─── Task ───────────────────────────────────────────────────────────────── */

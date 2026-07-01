@@ -46,6 +46,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 
 | Board-Label | GPIO | Funktion | Verbindung |
 |---|---|---|---|
+| D1 | GPIO 2 | Tachometer-Eingang | 4,7 kΩ pull-up an 3V3, dann → Lüfter **Pin 3** (Tacho, grün) |
 | D2 | GPIO 3 | PWM-Ausgang 25 kHz | 100 Ω → **Lüfter Pin 4** (PWM, alle 4 parallel via PST) |
 | D4 / SDA | GPIO 5 | I²C SDA | BME280 SDA **und** OLED SDA |
 | D5 / SCL | GPIO 6 | I²C SCL | BME280 SCL **und** OLED SCL |
@@ -58,7 +59,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 |---|---|---|
 | 1 – GND | Schwarz | GND (Netzteil) |
 | 2 – +12V | Gelb/Rot | +12V (Netzteil) |
-| 3 – Tacho | Grün | nicht angeschlossen *(optional: GPIO2 + 4,7 kΩ pull-up → Drehzahlmessung)* |
+| 3 – Tacho | Grün | 4,7 kΩ pull-up an 3V3 → **GPIO2 (D1)** *(nur von EINEM Lüfter anschließen)* |
 | 4 – PWM | Blau | 100 Ω → GPIO3 (alle 4 Lüfter parallel, PST-Daisy-Chain) |
 
 > **I²C-Bus:** GPIO 5/6, 400 kHz. BME280 (0x76) und OLED (0x3C) teilen sich den Bus – initialisiert einmalig in `i2c_bus.c`.  
@@ -81,7 +82,8 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
       GND                      GND                                         │                     │
                                                              Pin 2 (+12V)  │ ─────────────────── ┘ (oben, rot)
                                                              Pin 1 (GND)   │ ─── GND (Netzteil)
-                                                             Pin 3 (Tacho) │ ─── n.c.  (opt.: 4,7kΩ → 3V3 → GPIO2)
+                                                             Pin 3 (Tacho) │ ─── 4,7 kΩ ─── 3V3   (nur von L1 anschließen)
+                                                             Pin 3 (Tacho) │ ─── GPIO2 (D1)
                                                              Pin 4 (PWM)   │ ─── alle 4 zusammen ──┐
                                                                            └─────────────────────  │
                                                                                                    │
@@ -108,6 +110,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
                         └── SCL ──────────────────────────────── GPIO6 / D5
 
   GPIO3 / D2 ──── R1 (100 Ω) ──── Lüfter Pin 4 (PWM, alle 4 via PST)
+  GPIO2 / D1 ──────────────────── Lüfter Pin 3 (Tacho, NUR L1) ──── 4,7 kΩ ──── 3V3
   GND (XIAO) ──────────────────── GND (gemeinsam mit 12-V-Netzteil-Minus)
 ```
 
@@ -118,6 +121,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 ## Features
 
 - **25 kHz PWM** direkt auf Fan-Pin 4 (4-Pin-Standard, Intel PWM-Spec), via LEDC-Peripheral (10-Bit, 1024 Stufen)
+- **Drehzahlmessung (RPM)** – Tach-Signal (Pin 3) per GPIO-Interrupt, Abtastfenster 1 s, 2 Impulse/Umdrehung
 - **Sanfte Ramp-Funktion** – 0 % → 100 % in ~4 Sekunden, verhindert Anlaufstrom-Spitzen
 - **Kickstart-Puls** – beim Anlaufen aus dem Stillstand kurz auf 60 % für 400 ms, damit der Motor auch bei niedrigem PWM-Tastverhältnis sicher anläuft
 - **Automatische Temperaturregelung** – lineare Interpolation zwischen konfigurierbaren Temperaturgrenzen
@@ -161,7 +165,7 @@ Das Display wird über den gleichen I²C-Bus wie der BME280 betrieben und zeigt 
 
 | Methode | Pfad | Beschreibung |
 |---|---|---|
-| `GET` | `/api/status` | JSON-Snapshot aller Werte |
+| `GET` | `/api/status` | JSON-Snapshot aller Werte inkl. `fan_rpm` |
 | `POST` | `/api/control` | Modus (auto/manuell) und Lüfterprozent setzen |
 | `POST` | `/api/config` | Temperaturgrenzwerte und Nachtmodus konfigurieren |
 | `POST` | `/api/time` | Systemzeit vom Browser synchronisieren |
@@ -187,6 +191,7 @@ esp32_pwmcontroller/
     ├── captive_dns.c/.h    ← UDP-DNS-Server (Port 53), Captive Portal
     ├── webserver.c/.h      ← HTTP-Server, alle API-Handler + Portal-Redirects
     ├── oled.c/.h           ← SSD1306-Treiber + Display-Task (Framebuffer, 5×7-Font)
+    ├── tach.c/.h           ← Tachometer: GPIO-ISR Impulszähler → RPM-Berechnung
     └── web/
         └── index.html      ← Eingebettetes Webinterface (EMBED_FILES)
 ```
@@ -273,6 +278,9 @@ idf.py -p /dev/cu.usbmodem12501 flash monitor
 | `OLED_I2C_ADDR` | 0x3C | I²C-Adresse des SSD1306 (0x3D wenn SA0=High) |
 | `OLED_REFRESH_MS` | 2500 ms | Display-Aktualisierungsintervall |
 | `I2C_FREQ_HZ` | 400 000 Hz | I²C-Bus-Taktfrequenz |
+| `TACH_GPIO` | 2 (D1) | GPIO für Tachometer-Eingang |
+| `TACH_PULSES_PER_REV` | 2 | Impulse pro Umdrehung (Arctic-Standard) |
+| `TACH_SAMPLE_MS` | 1000 ms | Messfenster für RPM-Berechnung |
 
 Alle Laufzeit-Werte (`temp_low`, `temp_high`, `fan_min`, `fan_max`, Nachtmodus) sind über das Webinterface änderbar.  
 Die übrigen Parameter werden zur Kompilierzeit in `app_config.h` festgelegt.

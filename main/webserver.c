@@ -131,13 +131,14 @@ static esp_err_t handler_status(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    char buf[512];
+    char buf[640];
     snprintf(buf, sizeof(buf),
         "{"
         "\"temperature\":%.2f,"
         "\"humidity\":%.2f,"
         "\"fan_pct\":%.1f,"
         "\"fan_target\":%.1f,"
+        "\"fan_rpm\":%u,"
         "\"auto_mode\":%s,"
         "\"manual_pct\":%u,"
         "\"temp_low\":%.1f,"
@@ -155,6 +156,7 @@ static esp_err_t handler_status(httpd_req_t *req)
         g_state.humidity,
         g_state.fan_current_pct,
         g_state.fan_target_pct,
+        (unsigned)g_state.fan_rpm,
         g_state.auto_mode     ? "true" : "false",
         g_state.manual_pct,
         g_state.temp_low,
