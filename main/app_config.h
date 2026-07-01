@@ -5,10 +5,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-/* ─── Hardware pins ────────────────────────────────────────────────────────── */
-#define PWM_GPIO            16
-#define I2C_SDA_GPIO        21
-#define I2C_SCL_GPIO        22
+/* ─── Hardware pins (Seeed Studio XIAO ESP32-S3) ───────────────────────────── */
+/*                                                                              */
+/*  Board label │ GPIO │ Used for                                               */
+/*  ────────────┼──────┼──────────────────────────────────────────────────      */
+/*  D2          │  3   │ PWM → 100 Ω → Gate IRLZ44N                            */
+/*  D4 / SDA    │  5   │ I²C SDA (BME280 + SSD1306 OLED)                       */
+/*  D5 / SCL    │  6   │ I²C SCL (BME280 + SSD1306 OLED)                       */
+/*                                                                              */
+#define PWM_GPIO            3
+#define I2C_SDA_GPIO        5
+#define I2C_SCL_GPIO        6
 #define I2C_PORT            I2C_NUM_0
 #define I2C_FREQ_HZ         400000
 

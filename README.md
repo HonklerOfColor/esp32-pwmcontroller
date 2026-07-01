@@ -14,7 +14,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 
 | Merkmal | Wert |
 |---|---|
-| MCU | ESP32-S3 DevKit |
+| MCU | Seeed Studio XIAO ESP32-S3 |
 | Lüfter | 4× Arctic P14 Pro PST (Zuluft, parallel) |
 | PWM-Frequenz | 25 kHz |
 | Regelung | Linear zwischen zwei konfigurierbaren Temperaturgrenzen |
@@ -32,7 +32,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 
 | Bauteil | Beschreibung |
 |---|---|
-| ESP32-S3 DevKit | Mikrocontroller mit WLAN |
+| Seeed Studio XIAO ESP32-S3 | Kompakter ESP32-S3 (USB-C, 11 I/O-Pins) |
 | 4× Arctic P14 Pro PST | 140-mm-Lüfter (PST = gemeinsame PWM-Leitung) |
 | IRLZ44N (TO-220) | Logic-Level MOSFET, Low-Side-Schalter |
 | BME280 | Temperatur- + Luftfeuchtesensor, I²C (Adresse 0x76) |
@@ -42,17 +42,19 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 | 100 Ω | Gate-Widerstand (Schutz ESP32-Ausgang) |
 | 10 kΩ | Pull-Down am Gate (MOSFET sicher AUS wenn GPIO unkonfiguriert) |
 
-### Pinbelegung
+### Pinbelegung (XIAO ESP32-S3)
 
-| ESP32-S3-Pin | Funktion | Verbindung |
-|---|---|---|
-| GPIO 16 | PWM-Ausgang (25 kHz) | 100 Ω → Gate IRLZ44N |
-| GPIO 21 | I²C SDA (gemeinsam) | BME280 SDA **und** OLED SDA |
-| GPIO 22 | I²C SCL (gemeinsam) | BME280 SCL **und** OLED SCL |
-| 3,3 V | Sensorversorgung | BME280 VIN + OLED VCC |
-| GND | Gemeinsame Masse | Alle GND |
+| Board-Label | GPIO | Funktion | Verbindung |
+|---|---|---|---|
+| D2 | GPIO 3 | PWM-Ausgang (25 kHz) | 100 Ω → Gate IRLZ44N |
+| D4 / SDA | GPIO 5 | I²C SDA (gemeinsam) | BME280 SDA **und** OLED SDA |
+| D5 / SCL | GPIO 6 | I²C SCL (gemeinsam) | BME280 SCL **und** OLED SCL |
+| 3V3 | – | Sensorversorgung | BME280 VIN + OLED VCC |
+| GND | – | Gemeinsame Masse | Alle GND |
 
-> **I²C-Bus:** BME280 (0x76) und SSD1306 OLED (0x3C) teilen sich GPIO 21/22 bei **400 kHz**. Der Bus wird einmal in `i2c_bus.c` initialisiert; beide Treiber erhalten den gleichen Handle via `i2c_bus_get_handle()`. Externe Pull-ups (4,7 kΩ) sind optional – die internen Pull-ups des ESP32 reichen bei kurzen Leitungen.
+> **I²C-Bus:** BME280 (0x76) und SSD1306 OLED (0x3C) teilen sich GPIO 5/6 bei **400 kHz**. Der Bus wird einmal in `i2c_bus.c` initialisiert; beide Treiber erhalten den gleichen Handle via `i2c_bus_get_handle()`. Externe Pull-ups (4,7 kΩ) sind optional – die internen Pull-ups des ESP32 reichen bei kurzen Leitungen.
+
+> **Wichtig für XIAO-Nutzer:** GPIO 21 ist auf diesem Board die `USER_LED` und darf **nicht** als I²C-SDA verwendet werden. GPIO 22 existiert auf dem XIAO gar nicht.
 
 ### Schaltplan
 
@@ -78,7 +80,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
                                                                                                    │ (alle 4 GND zusammen)
                                                                                                    │
                                                                                                ┌───┴───┐
-                                                              GPIO16 ──── R1 (100 Ω) ──────────┤  G    │
+                                                   GPIO3 (D2) ──── R1 (100 Ω) ──────────┤  G    │
                                                               GND    ──── R2 (10 kΩ)  ──────────┤  G    │  IRLZ44N
                                                                                                ├─  D   │  (TO-220)
                                                                                                │       │
@@ -91,10 +93,10 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 
 ---
 
-#### 3,3-V-Kreis – ESP32-S3 & I²C-Sensoren
+#### 3,3-V-Kreis – XIAO ESP32-S3 & I²C-Sensoren
 
 ```
-  +3V3 (ESP32)
+  +3V3 (XIAO-Pin)
        │
        ├───────────────────────────────── VCC ─── BME280  (I²C-Adresse 0x76)
        │                                           ├── SDA ──────────────────────────┐
@@ -110,11 +112,12 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
                                               │   I²C-Bus (400 kHz)                   │
                                               │                             ┌──────────┘
                                               ▼                             ▼
-                                  ESP32-S3 GPIO21 (SDA)       ESP32-S3 GPIO22 (SCL)
+                                  GPIO5 / D4 (SDA)            GPIO6 / D5 (SCL)
+                                  [XIAO-Label: SDA]           [XIAO-Label: SCL]
 
 
-  ESP32-S3 GPIO16 (PWM 25 kHz) ──── R1 ──── MOSFET Gate      (siehe 12-V-Kreis oben)
-  ESP32-S3 GND ────────────────────────────────────────────── GND (gemeinsam mit Netzteil)
+  GPIO3 / D2 (PWM 25 kHz) ──── R1 ──── MOSFET Gate           (siehe 12-V-Kreis oben)
+  GND (XIAO) ──────────────────────────────────────────────── GND (gemeinsam mit Netzteil)
 ```
 
 > Externe Pull-up-Widerstände (4,7 kΩ) auf SDA/SCL sind **optional** – bei kurzen Leitungen (< 10 cm) reichen die internen Pull-ups des ESP32.
