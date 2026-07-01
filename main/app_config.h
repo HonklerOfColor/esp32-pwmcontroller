@@ -9,15 +9,28 @@
 /*                                                                              */
 /*  Board label │ GPIO │ Used for                                               */
 /*  ────────────┼──────┼──────────────────────────────────────────────────      */
-/*  D2          │  3   │ PWM → 100 Ω → Gate IRLZ44N                            */
-/*  D4 / SDA    │  5   │ I²C SDA (BME280 + SSD1306 OLED)                       */
-/*  D5 / SCL    │  6   │ I²C SCL (BME280 + SSD1306 OLED)                       */
+/*  D2          │  3   │ PWM 25 kHz → 100 Ω → Fan Pin 4 (PWM, PST-Chain)       */
+/*  D4 / SDA    │  5   │ I²C SDA (BME280 0x76 + SSD1306 OLED 0x3C)             */
+/*  D5 / SCL    │  6   │ I²C SCL                                                */
+/*                                                                              */
+/*  4-pin fan wiring (per Lüfter):                                              */
+/*    Pin 1 (GND,   schwarz) → GND (Netzteil)                                  */
+/*    Pin 2 (+12V,  rot)     → +12V (Netzteil)                                 */
+/*    Pin 3 (Tacho, grün)    → nicht angeschlossen (optional: TACH_GPIO)        */
+/*    Pin 4 (PWM,   blau)    → 100 Ω → GPIO3                                   */
+/*                                                                              */
+/*  PST (Parallel Speed Technology): alle 4 Lüfter Pin 4 parallel an GPIO3.    */
+/*  ESP32-3,3-V-Signal wird von den Arctic-Lüftern akzeptiert (kein Level-      */
+/*  Shifter nötig, Eingang ist 5V-tolerant / akzeptiert Low bei < 0,8 V).       */
 /*                                                                              */
 #define PWM_GPIO            3
 #define I2C_SDA_GPIO        5
 #define I2C_SCL_GPIO        6
 #define I2C_PORT            I2C_NUM_0
 #define I2C_FREQ_HZ         400000
+
+/* Optional: Tachometer-Eingang (Pin 3 eines Lüfters, pull-up 4,7 kΩ an 3V3)  */
+/* #define TACH_GPIO        2  */
 
 /* ─── LEDC / PWM ───────────────────────────────────────────────────────────── */
 #define PWM_FREQ_HZ         25000

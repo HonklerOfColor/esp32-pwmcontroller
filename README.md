@@ -1,7 +1,7 @@
 # ESP32-S3 Lüftersteuerung – 4× Arctic P14 Pro PST
 
 Temperaturgesteuerte PWM-Lüfterregelung mit OLED-Display und Webinterface, gebaut auf **ESP-IDF v6** (kein Arduino-Framework).  
-Vier Arctic-P14-Pro-PST-Lüfter werden über einen IRLZ44N Low-Side-MOSFET mit 25 kHz PWM gesteuert.  
+Vier Arctic-P14-Pro-PST-Lüfter (4-Pin) werden über das **native 25-kHz-PWM-Signal direkt an Pin 4** gesteuert – kein MOSFET im 12-V-Pfad, kein Leistungsverlust.  
 Ein 0,96"-SSD1306-OLED zeigt Temperatur, Luftfeuchte, Lüfterleistung und Betriebsmodus direkt am Gerät an.  
 Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbinden und im Browser öffnen.
 
@@ -16,7 +16,7 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 |---|---|
 | MCU | Seeed Studio XIAO ESP32-S3 |
 | Lüfter | 4× Arctic P14 Pro PST (Zuluft, parallel) |
-| PWM-Frequenz | 25 kHz |
+| PWM-Frequenz | 25 kHz, direkt auf Fan-Pin 4 (Intel 4-Wire-Spec) |
 | Regelung | Linear zwischen zwei konfigurierbaren Temperaturgrenzen |
 | Sensor | BME280 (Temperatur + Luftfeuchte) via I²C |
 | Display | 0,96" OLED SSD1306 128×64 (I²C, 0x3C) – Temperatur, Feuchte, Lüfter, Modus |
@@ -33,91 +33,82 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 | Bauteil | Beschreibung |
 |---|---|
 | Seeed Studio XIAO ESP32-S3 | Kompakter ESP32-S3 (USB-C, 11 I/O-Pins) |
-| 4× Arctic P14 Pro PST | 140-mm-Lüfter (PST = gemeinsame PWM-Leitung) |
-| IRLZ44N (TO-220) | Logic-Level MOSFET, Low-Side-Schalter |
+| 4× Arctic P14 Pro PST | 140-mm-Lüfter, 4-Pin PWM (PST = PWM-Leitungen aller 4 Lüfter parallel) |
 | BME280 | Temperatur- + Luftfeuchtesensor, I²C (Adresse 0x76) |
 | SSD1306 OLED 0,96" | 128×64-Pixel-Display, I²C (Adresse 0x3C) – z. B. APKLVSR von Amazon |
-| 100 µF / 25 V | Elektrolytkondensator (Entstörung, nah am MOSFET) |
+| 100 µF / 25 V | Elektrolytkondensator (Entstörung auf 12-V-Rail) |
 | 100 nF | Keramikkondensator (Entstörung, parallel zum Elko) |
-| 100 Ω | Gate-Widerstand (Schutz ESP32-Ausgang) |
-| 10 kΩ | Pull-Down am Gate (MOSFET sicher AUS wenn GPIO unkonfiguriert) |
+| 100 Ω | Serienwiderstand auf PWM-Leitung (Schutz GPIO, dämpft HF-Ringing) |
+
+> Kein MOSFET mehr nötig: Die 4-Pin-Lüfter haben ihren eigenen internen Motorcontroller und akzeptieren das 25-kHz-PWM-Signal direkt. Die Arctic-P14-PST-Lüfter akzeptieren 3,3-V-Logikpegel (kein Level-Shifter nötig).
 
 ### Pinbelegung (XIAO ESP32-S3)
 
 | Board-Label | GPIO | Funktion | Verbindung |
 |---|---|---|---|
-| D2 | GPIO 3 | PWM-Ausgang (25 kHz) | 100 Ω → Gate IRLZ44N |
-| D4 / SDA | GPIO 5 | I²C SDA (gemeinsam) | BME280 SDA **und** OLED SDA |
-| D5 / SCL | GPIO 6 | I²C SCL (gemeinsam) | BME280 SCL **und** OLED SCL |
+| D2 | GPIO 3 | PWM-Ausgang 25 kHz | 100 Ω → **Lüfter Pin 4** (PWM, alle 4 parallel via PST) |
+| D4 / SDA | GPIO 5 | I²C SDA | BME280 SDA **und** OLED SDA |
+| D5 / SCL | GPIO 6 | I²C SCL | BME280 SCL **und** OLED SCL |
 | 3V3 | – | Sensorversorgung | BME280 VIN + OLED VCC |
-| GND | – | Gemeinsame Masse | Alle GND |
+| GND | – | Masse | Alle GND (gemeinsam mit 12-V-Netzteil-Minus) |
 
-> **I²C-Bus:** BME280 (0x76) und SSD1306 OLED (0x3C) teilen sich GPIO 5/6 bei **400 kHz**. Der Bus wird einmal in `i2c_bus.c` initialisiert; beide Treiber erhalten den gleichen Handle via `i2c_bus_get_handle()`. Externe Pull-ups (4,7 kΩ) sind optional – die internen Pull-ups des ESP32 reichen bei kurzen Leitungen.
+**4-Pin-Lüfter – Pinbelegung (pro Lüfter):**
 
-> **Wichtig für XIAO-Nutzer:** GPIO 21 ist auf diesem Board die `USER_LED` und darf **nicht** als I²C-SDA verwendet werden. GPIO 22 existiert auf dem XIAO gar nicht.
+| Lüfter-Pin | Farbe (Arctic) | Verbindung |
+|---|---|---|
+| 1 – GND | Schwarz | GND (Netzteil) |
+| 2 – +12V | Gelb/Rot | +12V (Netzteil) |
+| 3 – Tacho | Grün | nicht angeschlossen *(optional: GPIO2 + 4,7 kΩ pull-up → Drehzahlmessung)* |
+| 4 – PWM | Blau | 100 Ω → GPIO3 (alle 4 Lüfter parallel, PST-Daisy-Chain) |
+
+> **I²C-Bus:** GPIO 5/6, 400 kHz. BME280 (0x76) und OLED (0x3C) teilen sich den Bus – initialisiert einmalig in `i2c_bus.c`.  
+> **XIAO-Hinweis:** GPIO 21 = USER_LED, GPIO 22 existiert nicht → niemals als I²C verwenden.
 
 ### Schaltplan
 
-#### 12-V-Kreis – Lüfter & MOSFET
+#### 12-V-Kreis – Lüfter (4-Pin, direkte PWM-Steuerung)
 
 ```
   +12V (Netzteil)
        │
-       ├─────────────────────────────────────────────── +12V (rot) ──────────────────┐
-       │                                                                              │
-     ──┤├── C1: 100 µF / 25 V  ──┐                                         ┌──────────┴──────────┐
-     ──┤├── C2: 100 nF          ─┤ GND                               ┌─────┤   Lüfter L1         │
-       │   (nah am MOSFET,       │                                   ├─────┤   Lüfter L2         │
-       │    parallel zu 12V/GND) │                                   ├─────┤   Lüfter L3  (alle  │
-       │                         │                                   └─────┤   Lüfter L4  4-pin) │
-      GND                       GND                                        │                     │
-                                                                           │   GND (schwarz) ─────┼──┐
-                                                                           │   +12V (rot)    ─────┘  │
-                                                                           │   Tacho (grün)  ─ n.c.  │
-                                                                           │   PWM  (blau)   ─ n.c.  │
-                                                                           └─────────────────────────┘
+       ├───────────────────────────────── +12V ────────────────────────────────────────┐
+       │                                                                               │
+     ──┤├── C1: 100 µF / 25 V ──┐                                          ┌──────────┴──────────┐
+     ──┤├── C2: 100 nF         ─┤ GND                                ┌─────┤  L1: Arctic P14 PST │
+       │   (nah an den Lüftern, │                                    ├─────┤  L2: Arctic P14 PST │
+       │    parallel zu 12V/GND)│                                    ├─────┤  L3: Arctic P14 PST │
+       │                        │                                    └─────┤  L4: Arctic P14 PST │
+      GND                      GND                                         │                     │
+                                                             Pin 2 (+12V)  │ ─────────────────── ┘ (oben, rot)
+                                                             Pin 1 (GND)   │ ─── GND (Netzteil)
+                                                             Pin 3 (Tacho) │ ─── n.c.  (opt.: 4,7kΩ → 3V3 → GPIO2)
+                                                             Pin 4 (PWM)   │ ─── alle 4 zusammen ──┐
+                                                                           └─────────────────────  │
                                                                                                    │
-                                                                                                   │ (alle 4 GND zusammen)
-                                                                                                   │
-                                                                                               ┌───┴───┐
-                                                   GPIO3 (D2) ──── R1 (100 Ω) ──────────┤  G    │
-                                                              GND    ──── R2 (10 kΩ)  ──────────┤  G    │  IRLZ44N
-                                                                                               ├─  D   │  (TO-220)
-                                                                                               │       │
-                                                                                               └───┬───┘
-                                                                                                   │ S (Source)
-                                                                                                  GND
+                                              GPIO3 (D2) ──── R1 (100 Ω) ─────────────────────────┘
+                                              (XIAO ESP32-S3, 3,3-V-Logik, 25 kHz PWM)
 ```
 
-> R_DS(on) ≈ 35 mΩ bei V_GS = 3,3 V, I_D = 1,4 A → P_V ≈ 70 mW. Kein Kühlkörper nötig.
+> Die Lüfter haben einen **internen Motorcontroller**: Pin 4 steuert die Drehzahl direkt, +12V und GND sind dauerhaft verbunden. Kein MOSFET im Leistungspfad nötig.  
+> **PST** (Parallel Speed Technology): die vier PWM-Pins (Pin 4) aller Lüfter sind über die PST-Daisy-Chain intern verbunden – ein einziges PWM-Signal steuert alle vier.
 
 ---
 
 #### 3,3-V-Kreis – XIAO ESP32-S3 & I²C-Sensoren
 
 ```
-  +3V3 (XIAO-Pin)
+  +3V3 (XIAO)
        │
-       ├───────────────────────────────── VCC ─── BME280  (I²C-Adresse 0x76)
-       │                                           ├── SDA ──────────────────────────┐
-       │                                           ├── SCL ────────────────────────┐ │
-       │                                           └── GND ───── GND               │ │
-       │                                                                            │ │
-       └───────────────────────────────── VCC ─── SSD1306 OLED (I²C-Adresse 0x3C) │ │
-                                                   ├── SDA ──────────────────────────┤ │
-                                                   ├── SCL ────────────────────────┤ │
-                                                   └── GND ───── GND               │ │
-                                                                                    │ │
-                                              ┌─────────────────────────────────────┘ │
-                                              │   I²C-Bus (400 kHz)                   │
-                                              │                             ┌──────────┘
-                                              ▼                             ▼
-                                  GPIO5 / D4 (SDA)            GPIO6 / D5 (SCL)
-                                  [XIAO-Label: SDA]           [XIAO-Label: SCL]
+       ├───── VCC ──── BME280  (0x76) ───── GND
+       │               ├── SDA ──────────────────────────────── GPIO5 / D4 (XIAO SDA)
+       │               └── SCL ──────────────────────────────── GPIO6 / D5 (XIAO SCL)
+       │
+       └───── VCC ──── SSD1306 (0x3C) ───── GND
+                        ├── SDA ──────────────────────────────── GPIO5 / D4
+                        └── SCL ──────────────────────────────── GPIO6 / D5
 
-
-  GPIO3 / D2 (PWM 25 kHz) ──── R1 ──── MOSFET Gate           (siehe 12-V-Kreis oben)
-  GND (XIAO) ──────────────────────────────────────────────── GND (gemeinsam mit Netzteil)
+  GPIO3 / D2 ──── R1 (100 Ω) ──── Lüfter Pin 4 (PWM, alle 4 via PST)
+  GND (XIAO) ──────────────────── GND (gemeinsam mit 12-V-Netzteil-Minus)
 ```
 
 > Externe Pull-up-Widerstände (4,7 kΩ) auf SDA/SCL sind **optional** – bei kurzen Leitungen (< 10 cm) reichen die internen Pull-ups des ESP32.
@@ -126,9 +117,9 @@ Der ESP arbeitet als **WLAN-Access-Point** – kein Router nötig, einfach verbi
 
 ## Features
 
-- **25 kHz PWM** via LEDC-Peripheral (10-Bit, 1024 Stufen)
-- **Sanfte Ramp-Funktion** – 0 % → 100 % in ~4 Sekunden, verhindert Stromspitzen
-- **Kickstart-Puls** – beim Anlaufen aus dem Stillstand kurz auf 60 % für 400 ms, damit der Motor zuverlässig anläuft
+- **25 kHz PWM** direkt auf Fan-Pin 4 (4-Pin-Standard, Intel PWM-Spec), via LEDC-Peripheral (10-Bit, 1024 Stufen)
+- **Sanfte Ramp-Funktion** – 0 % → 100 % in ~4 Sekunden, verhindert Anlaufstrom-Spitzen
+- **Kickstart-Puls** – beim Anlaufen aus dem Stillstand kurz auf 60 % für 400 ms, damit der Motor auch bei niedrigem PWM-Tastverhältnis sicher anläuft
 - **Automatische Temperaturregelung** – lineare Interpolation zwischen konfigurierbaren Temperaturgrenzen
 - **Nachtabsenkung** – konfigurierbare Start-/Endzeit, maximale Lüftergeschwindigkeit nachts begrenzt
 - **OLED-Display (SSD1306 128×64)** – zeigt Temperatur (groß), Luftfeuchte, Lüfterprozent, Modus und Uhrzeit; Refresh alle 2,5 s

@@ -39,7 +39,7 @@ void pwm_init(void)
     };
     ESP_ERROR_CHECK(ledc_timer_config(&timer_cfg));
 
-    /* Channel: GPIO 16, starts at 0 % */
+    /* Channel: GPIO PWM_GPIO, direct output to fan pin 4, starts at 0 % */
     ledc_channel_config_t ch_cfg = {
         .gpio_num   = PWM_GPIO,
         .speed_mode = LEDC_LOW_SPEED_MODE,
